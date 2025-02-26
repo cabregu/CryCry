@@ -28,6 +28,7 @@ Partial Class FrmCryCry
         Label1 = New Label()
         DataGridView2 = New DataGridView()
         Button1 = New Button()
+        Button2 = New Button()
         CType(DataGridView1, ComponentModel.ISupportInitialize).BeginInit()
         CType(DataGridView2, ComponentModel.ISupportInitialize).BeginInit()
         SuspendLayout()
@@ -88,11 +89,21 @@ Partial Class FrmCryCry
         Button1.Text = "Consultar"
         Button1.UseVisualStyleBackColor = True
         ' 
+        ' Button2
+        ' 
+        Button2.Location = New Point(310, 599)
+        Button2.Name = "Button2"
+        Button2.Size = New Size(75, 23)
+        Button2.TabIndex = 6
+        Button2.Text = "Button2"
+        Button2.UseVisualStyleBackColor = True
+        ' 
         ' FrmCryCry
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
         ClientSize = New Size(735, 663)
+        Controls.Add(Button2)
         Controls.Add(DataGridView2)
         Controls.Add(Button1)
         Controls.Add(Label1)
@@ -113,5 +124,6 @@ Partial Class FrmCryCry
     Friend WithEvents Label1 As Label
     Friend WithEvents DataGridView2 As DataGridView
     Friend WithEvents Button1 As Button
+    Friend WithEvents Button2 As Button
 
 End Class

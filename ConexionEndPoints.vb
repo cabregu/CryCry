@@ -1,4 +1,5 @@
-﻿Imports System.IO
+﻿Imports System.Data.SQLite
+Imports System.IO
 Imports System.Net
 Imports System.Net.Http
 Imports Newtonsoft.Json
@@ -10,6 +11,76 @@ Public Class ConexionEndPoints
         Public Property symbol As String
         Public Property price As Decimal
     End Class
+
+
+    Public Shared Sub CrearTablasSeguro()
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            ' Verificar si la tabla "ordenesfinalizadas" existe
+            Dim checkOrdersTableExists As String = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='ordenesfinalizadas'"
+            Using command As New SQLiteCommand(checkOrdersTableExists, connection)
+                Dim tableExists As Boolean = Convert.ToInt32(command.ExecuteScalar()) > 0
+                If Not tableExists Then
+                    ' Crear tabla "ordenesfinalizadas"
+                    Dim createOrdersTable As String = "CREATE TABLE ordenesfinalizadas (" &
+                                                 "moneda TEXT, " &
+                                                 "id INTEGER, " &
+                                                 "precio REAL, " &
+                                                 "cantidad REAL, " &
+                                                 "quoteqty REAL, " &
+                                                 "tiempo TEXT, " &
+                                                 "tipo TEXT)"
+                    Using createCommand As New SQLiteCommand(createOrdersTable, connection)
+                        createCommand.ExecuteNonQuery()
+                    End Using
+                End If
+            End Using
+
+            ' Verificar si la tabla "precios" existe
+            Dim checkPricesTableExists As String = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='precios'"
+            Using command As New SQLiteCommand(checkPricesTableExists, connection)
+                Dim tableExists As Boolean = Convert.ToInt32(command.ExecuteScalar()) > 0
+                If Not tableExists Then
+                    ' Crear tabla "precios"
+                    Dim createPricesTable As String = "CREATE TABLE precios (" &
+                                                 "moneda TEXT, " &
+                                                 "tiempo TEXT, " &
+                                                 "precio REAL)"
+                    Using createCommand As New SQLiteCommand(createPricesTable, connection)
+                        createCommand.ExecuteNonQuery()
+                    End Using
+                End If
+            End Using
+
+            ' Verificar si la tabla "ordenespendientes" existe
+            Dim checkPendingOrdersTableExists As String = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='ordenespendientes'"
+            Using command As New SQLiteCommand(checkPendingOrdersTableExists, connection)
+                Dim tableExists As Boolean = Convert.ToInt32(command.ExecuteScalar()) > 0
+                If Not tableExists Then
+                    ' Crear tabla "ordenespendientes"
+                    Dim createPendingOrdersTable As String = "CREATE TABLE ordenespendientes (" &
+                                                        "moneda TEXT, " &
+                                                        "tiempo TEXT, " &
+                                                        "precio REAL, " &
+                                                        "cantidad REAL, " &
+                                                        "tipo TEXT)"
+                    Using createCommand As New SQLiteCommand(createPendingOrdersTable, connection)
+                        createCommand.ExecuteNonQuery()
+                    End Using
+                End If
+            End Using
+        End Using
+    End Sub
+
+    Private Shared Function ObtenerConexion() As String
+        Dim connectionString As String
+        connectionString = "Data Source=C:\BaseBina\BaseBina.db;Version=3;"
+        Return connectionString
+    End Function
+
+
+
 
 
     'PUBLICAS PARA CONSULTAS A BIANANCE
