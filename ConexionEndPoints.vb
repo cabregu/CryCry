@@ -1,5 +1,6 @@
 ﻿Imports System.IO
 Imports System.Net
+Imports System.Net.Http
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
 
@@ -10,36 +11,68 @@ Public Class ConexionEndPoints
         Public Property price As Decimal
     End Class
 
-    'Obtener el ptecio por crypto
-    Public Shared Function ObtenerPrecio(ByVal Symbolo As String) As Decimal
+
+    'PUBLICAS PARA CONSULTAS A BIANANCE
+
+    Public Shared Function ObtenerHoraServidor() As DateTime
         Try
-            Dim request As WebRequest = WebRequest.Create("https://api.binance.com/api/v3/ticker/price?symbol=" & Symbolo)
-            request.Credentials = CredentialCache.DefaultCredentials
+            ' URL para obtener la hora del servidor
+            Dim horaUrl As String = "https://api.binance.com/api/v3/time"
+            Dim horaRequest As WebRequest = WebRequest.Create(horaUrl)
+            Dim horaResponse As WebResponse = horaRequest.GetResponse()
+            Dim horaStream As Stream = horaResponse.GetResponseStream()
+            Dim horaReader As New StreamReader(horaStream)
+            Dim horaJson As String = horaReader.ReadToEnd()
 
-            Dim response As WebResponse = request.GetResponse()
-            Dim dataStream As Stream = response.GetResponseStream()
-            Dim reader As New StreamReader(dataStream)
-            Dim responseFromServer As String = reader.ReadToEnd()
+            ' Deserializar la hora del servidor
+            Dim horaData As JObject = JObject.Parse(horaJson)
+            Dim serverTime As Long = CLng(horaData("serverTime"))
+            Dim serverDateTime As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(serverTime).UtcDateTime
 
-            ' Print the response for debugging
-            Console.WriteLine(responseFromServer)
+            ' Cerrar recursos
+            horaReader.Close()
+            horaResponse.Close()
 
-            ' Deserialize the JSON response
-            Dim precios As PreciosActuales = JsonConvert.DeserializeObject(Of PreciosActuales)(responseFromServer)
-
-            reader.Close()
-            response.Close()
-
-            Return precios.price
+            ' Devolver la hora del servidor
+            Return serverDateTime
         Catch ex As Exception
-            Console.WriteLine("Error: " & ex.Message)
-            Return 0 ' Return a default value or handle the error as needed
+            Console.WriteLine("Error al obtener la hora del servidor: " & ex.Message)
+            ' En caso de error, devolver un valor por defecto
+            Return DateTime.MinValue
         End Try
     End Function
 
+    Public Shared Function ObtenerPrecio(ByVal Symbolo As String) As (Decimal, DateTime)
+        Try
+            ' URL para obtener el precio actual
+            Dim precioUrl As String = "https://api.binance.com/api/v3/ticker/price?symbol=" & Symbolo
+            Dim precioRequest As WebRequest = WebRequest.Create(precioUrl)
+            Dim precioResponse As WebResponse = precioRequest.GetResponse()
+            Dim precioStream As Stream = precioResponse.GetResponseStream()
+            Dim precioReader As New StreamReader(precioStream)
+            Dim precioJson As String = precioReader.ReadToEnd()
 
+            ' Deserializar el precio
+            Dim precios As PreciosActuales = JsonConvert.DeserializeObject(Of PreciosActuales)(precioJson)
+            Dim precio As Decimal = precios.price
 
-    Public Shared Function ObtenerOrderstrades(symbol As String, Optional limit As Integer = 500) As DataTable
+            ' Cerrar recursos
+            precioReader.Close()
+            precioResponse.Close()
+
+            ' Llamar a la función ObtenerHoraServidor para obtener la hora
+            Dim serverDateTime As DateTime = ObtenerHoraServidor()
+
+            ' Devolver el precio y la hora del servidor como una tupla
+            Return (precio, serverDateTime)
+        Catch ex As Exception
+            Console.WriteLine("Error al obtener el precio: " & ex.Message)
+            ' En caso de error, devolver valores por defecto
+            Return (0, DateTime.MinValue)
+        End Try
+    End Function
+
+    Public Shared Function ObtenerOrderstrades(symbol As String, Optional limit As Integer = 1000) As DataTable
         Dim url As String = $"https://api.binance.com/api/v3/trades?symbol={symbol}&limit={limit}"
 
         Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
@@ -58,7 +91,7 @@ Public Class ConexionEndPoints
         tradesTable.Columns.Add("Precio", GetType(Decimal))
         tradesTable.Columns.Add("Cantidad", GetType(Decimal))
         tradesTable.Columns.Add("QuoteQty", GetType(Decimal))
-        tradesTable.Columns.Add("Marca de tiempo", GetType(String))
+        tradesTable.Columns.Add("Tiempo", GetType(String))
         tradesTable.Columns.Add("Tipo", GetType(String))
 
         ' Agregar los datos de operaciones recientes al DataTable
@@ -85,44 +118,283 @@ Public Class ConexionEndPoints
         Return tradesTable
     End Function
 
-    Public Shared Function AgruparOrdenesPorMinuto(tradesTable As DataTable) As DataTable
-        Dim resultadoTable As New DataTable()
-        resultadoTable.Columns.Add("Tipo", GetType(String))
-        resultadoTable.Columns.Add("CantidadOrdenes", GetType(Integer))
-        resultadoTable.Columns.Add("SumaQuoteQty", GetType(Decimal))
-        resultadoTable.Columns.Add("Marca de tiempo", GetType(String))
+    Public Shared Function ObtenerLibroDeOrdenesContiempo(symbol As String, timestamp As String, Optional limit As Integer = 100) As DataTable
+        Try
+            Dim url As String = $"https://api.binance.com/api/v3/depth?symbol={symbol}&limit={limit}"
 
-        Dim grupos As New Dictionary(Of String, Dictionary(Of String, (Integer, Decimal)))
+            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+            request.Method = "GET"
 
-        For Each row As DataRow In tradesTable.Rows
-            Dim timestamp As DateTime = DateTime.ParseExact(row("Marca de tiempo").ToString(), "yyyy-MM-dd HH:mm:ss", Nothing)
-            Dim tipo As String = row("Tipo").ToString()
-            Dim quoteQty As Decimal = CDec(row("QuoteQty"))
+            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+            Dim responseStream As Stream = response.GetResponseStream()
+            Dim reader As New StreamReader(responseStream)
+            Dim responseJson As String = reader.ReadToEnd()
 
-            ' Agrupar por minuto completo (ignorando segundos)
-            Dim key As String = timestamp.ToString("yyyy-MM-dd HH:mm")
+            Dim parsedResponse As JObject = JObject.Parse(responseJson)
 
-            If Not grupos.ContainsKey(key) Then
-                grupos(key) = New Dictionary(Of String, (Integer, Decimal)) From {
-                {"Compra", (0, 0D)},
-                {"Venta", (0, 0D)}
-            }
-            End If
+            ' Crear la tabla con las columnas necesarias
+            Dim ordersTable As New DataTable()
+            ordersTable.Columns.Add("FechaYHora", GetType(String)) ' Nueva columna para la marca de tiempo
+            ordersTable.Columns.Add("Precio", GetType(Decimal))
+            ordersTable.Columns.Add("Cantidad", GetType(Decimal))
+            ordersTable.Columns.Add("Tipo", GetType(String)) ' Mover "Tipo" al final
 
-            grupos(key)(tipo) = (grupos(key)(tipo).Item1 + 1, grupos(key)(tipo).Item2 + quoteQty)
-        Next
-
-        ' Convertir los datos agrupados a DataTable
-        For Each kvp In grupos
-            Dim timestampGrupo As String = kvp.Key
-            For Each tipo In {"Compra", "Venta"}
-                If kvp.Value(tipo).Item1 > 0 Then
-                    resultadoTable.Rows.Add(tipo, kvp.Value(tipo).Item1, kvp.Value(tipo).Item2, timestampGrupo)
-                End If
+            ' Agregar las órdenes de compra (bids)
+            For Each bid As JArray In parsedResponse("bids")
+                Dim price As Decimal = CDec(bid(0))
+                Dim quantity As Decimal = CDec(bid(1))
+                ordersTable.Rows.Add(timestamp, price, quantity, "Compra") ' Agregar la marca de tiempo
             Next
-        Next
 
-        Return resultadoTable
+            ' Agregar las órdenes de venta (asks)
+            For Each ask As JArray In parsedResponse("asks")
+                Dim price As Decimal = CDec(ask(0))
+                Dim quantity As Decimal = CDec(ask(1))
+                ordersTable.Rows.Add(timestamp, price, quantity, "Venta") ' Agregar la marca de tiempo
+            Next
+
+            Return ordersTable
+        Catch ex As Exception
+            Console.WriteLine("Error: " & ex.Message)
+            Return Nothing
+        End Try
+    End Function
+
+    Public Shared Function ObtenerDatosVelasPublicos(symbol As String, interval As String, Optional limit As Integer = 100) As DataTable
+        Try
+            Dim url As String = $"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+
+            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+            request.Method = "GET"
+
+            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+            Dim responseStream As Stream = response.GetResponseStream()
+            Dim reader As New StreamReader(responseStream)
+            Dim responseJson As String = reader.ReadToEnd()
+
+            Dim parsedResponse As JArray = JArray.Parse(responseJson)
+
+            Dim candlesTable As New DataTable()
+            candlesTable.Columns.Add("OpenTime", GetType(DateTime))
+            candlesTable.Columns.Add("Open", GetType(Decimal))
+            candlesTable.Columns.Add("High", GetType(Decimal))
+            candlesTable.Columns.Add("Low", GetType(Decimal))
+            candlesTable.Columns.Add("Close", GetType(Decimal))
+            candlesTable.Columns.Add("Volume", GetType(Decimal))
+            candlesTable.Columns.Add("CloseTime", GetType(DateTime))
+
+            ' Obtener la zona horaria de Argentina
+            Dim argentinaTimeZone As TimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time")
+
+            For Each candle As JArray In parsedResponse
+                Dim openTime As Long = CLng(candle(0))
+                Dim open As Decimal = CDec(candle(1))
+                Dim high As Decimal = CDec(candle(2))
+                Dim low As Decimal = CDec(candle(3))
+                Dim close As Decimal = CDec(candle(4))
+                Dim volume As Decimal = CDec(candle(5))
+                Dim closeTime As Long = CLng(candle(6))
+
+                ' Convertir de UTC a hora de Argentina
+                Dim openDateTimeUtc As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(openTime).UtcDateTime
+                Dim closeDateTimeUtc As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(closeTime).UtcDateTime
+
+                Dim openDateTimeArgentina As DateTime = TimeZoneInfo.ConvertTimeFromUtc(openDateTimeUtc, argentinaTimeZone)
+                Dim closeDateTimeArgentina As DateTime = TimeZoneInfo.ConvertTimeFromUtc(closeDateTimeUtc, argentinaTimeZone)
+
+                candlesTable.Rows.Add(openDateTimeArgentina, open, high, low, close, volume, closeDateTimeArgentina)
+            Next
+
+            Return candlesTable
+        Catch ex As Exception
+            Console.WriteLine("Error: " & ex.Message)
+            Return Nothing
+        End Try
+    End Function
+
+
+
+
+
+    'SIN USAR AUN
+    Public Shared Function ObtenerOrdenesPendientes(apiKey As String, apiSecret As String, symbol As String) As DataTable
+        Try
+            ' URL para obtener las órdenes abiertas
+            Dim url As String = "https://api.binance.com/api/v3/openOrders?symbol=" & symbol
+
+            ' Crear la solicitud HTTP
+            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+            request.Method = "GET"
+            request.Headers.Add("X-MBX-APIKEY", apiKey)
+
+            ' Obtener la respuesta
+            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+            Dim responseStream As Stream = response.GetResponseStream()
+            Dim reader As New StreamReader(responseStream)
+            Dim responseJson As String = reader.ReadToEnd()
+
+            ' Parsear la respuesta JSON
+            Dim parsedResponse As JArray = JArray.Parse(responseJson)
+
+            ' Crear DataTable para almacenar las órdenes pendientes
+            Dim ordersTable As New DataTable()
+            ordersTable.Columns.Add("ID", GetType(Long))
+            ordersTable.Columns.Add("Símbolo", GetType(String))
+            ordersTable.Columns.Add("Precio", GetType(Decimal))
+            ordersTable.Columns.Add("Cantidad", GetType(Decimal))
+            ordersTable.Columns.Add("Estado", GetType(String))
+            ordersTable.Columns.Add("Fecha", GetType(String))
+
+            ' Agregar las órdenes al DataTable
+            For Each order As JObject In parsedResponse
+                Dim orderId As Long = CLng(order("orderId"))
+                Dim orderSymbol As String = order("symbol").ToString()
+                Dim price As Decimal = CDec(order("price"))
+                Dim quantity As Decimal = CDec(order("origQty"))
+                Dim status As String = order("status").ToString()
+                Dim timestamp As Long = CLng(order("time"))
+
+                ' Convertir la marca de tiempo a la hora local de Argentina
+                Dim utcDateTime As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).UtcDateTime
+                Dim argentinaTimeZone As TimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time")
+                Dim argentinaDateTime As DateTime = TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, argentinaTimeZone)
+
+                ' Formatear la fecha
+                Dim formattedDate As String = argentinaDateTime.ToString("yyyy-MM-dd HH:mm:ss")
+
+                ordersTable.Rows.Add(orderId, orderSymbol, price, quantity, status, formattedDate)
+            Next
+
+            Return ordersTable
+        Catch ex As Exception
+            Console.WriteLine("Error al obtener las órdenes pendientes: " & ex.Message)
+            Return Nothing ' Manejar el error según sea necesario
+        End Try
+    End Function
+    Public Shared Function ObtenerTodasLasOrdenes(apiKey As String, apiSecret As String, symbol As String, Optional limit As Integer = 500) As DataTable
+        Try
+            ' Generar el timestamp
+            Dim timestamp As Long = CLng((DateTime.UtcNow - New DateTime(1970, 1, 1)).TotalMilliseconds)
+
+            ' Construir la query string y generar la firma
+            Dim queryString As String = $"symbol={symbol}&limit={limit}&timestamp={timestamp}"
+            Dim signature As String = GenerarFirma(apiSecret, queryString)
+
+            ' Construir la URL completa
+            Dim url As String = $"https://api.binance.com/api/v3/allOrders?{queryString}&signature={signature}"
+
+            ' Crear la solicitud HTTP
+            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+            request.Method = "GET"
+            request.Headers.Add("X-MBX-APIKEY", apiKey)
+
+            ' Obtener la respuesta
+            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+            Dim responseStream As Stream = response.GetResponseStream()
+            Dim reader As New StreamReader(responseStream)
+            Dim responseJson As String = reader.ReadToEnd()
+
+            ' Parsear la respuesta JSON
+            Dim parsedResponse As JArray = JArray.Parse(responseJson)
+
+            ' Crear un DataTable para almacenar las órdenes
+            Dim ordersTable As New DataTable()
+            ordersTable.Columns.Add("ID", GetType(Long))
+            ordersTable.Columns.Add("Symbol", GetType(String))
+            ordersTable.Columns.Add("Price", GetType(Decimal))
+            ordersTable.Columns.Add("Quantity", GetType(Decimal))
+            ordersTable.Columns.Add("Status", GetType(String))
+            ordersTable.Columns.Add("Type", GetType(String))
+            ordersTable.Columns.Add("Side", GetType(String))
+            ordersTable.Columns.Add("Time", GetType(DateTime))
+
+            ' Agregar las órdenes al DataTable
+            For Each order As JObject In parsedResponse
+                Dim orderId As Long = CLng(order("orderId"))
+                Dim orderSymbol As String = order("symbol").ToString()
+                Dim price As Decimal = CDec(order("price"))
+                Dim quantity As Decimal = CDec(order("origQty"))
+                Dim status As String = order("status").ToString()
+                Dim type As String = order("type").ToString()
+                Dim side As String = order("side").ToString()
+                Dim time As Long = CLng(order("time"))
+
+                ' Convertir el timestamp a DateTime
+                Dim orderTime As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(time).UtcDateTime
+
+                ordersTable.Rows.Add(orderId, orderSymbol, price, quantity, status, type, side, orderTime)
+            Next
+
+            Return ordersTable
+        Catch ex As Exception
+            Console.WriteLine("Error: " & ex.Message)
+            Return Nothing
+        End Try
+    End Function
+    Public Shared Function GenerarFirma(apiSecret As String, queryString As String) As String
+
+        Dim secretKeyBytes As Byte() = System.Text.Encoding.UTF8.GetBytes(apiSecret)
+        Dim queryStringBytes As Byte() = System.Text.Encoding.UTF8.GetBytes(queryString)
+        Using hmac As New System.Security.Cryptography.HMACSHA256(secretKeyBytes)
+            Dim hashBytes As Byte() = hmac.ComputeHash(queryStringBytes)
+            Dim signature As String = BitConverter.ToString(hashBytes).Replace("-", "").ToLower()
+            Return signature
+        End Using
+    End Function
+
+
+
+
+    'COMPRA Y VENTA REAL
+    Public Shared Function EnviarOrden(apiKey As String, apiSecret As String, symbol As String, side As String, orderType As String, quantity As Decimal, Optional price As Decimal = 0, Optional timeInForce As String = "GTC") As String
+        ' URL del endpoint
+        Dim baseUrl As String = "https://api.binance.com"
+        Dim endpoint As String = "/api/v3/order"
+        Dim url As String = baseUrl & endpoint
+
+        ' Crear los parámetros de la orden
+        Dim timestamp As Long = CLng((DateTime.UtcNow - New DateTime(1970, 1, 1)).TotalMilliseconds)
+        Dim parameters As New Dictionary(Of String, String) From {
+        {"symbol", symbol},
+        {"side", side}, ' "BUY" o "SELL"
+        {"type", orderType}, ' "LIMIT", "MARKET", etc.
+        {"quantity", quantity.ToString()},
+        {"timestamp", timestamp.ToString()}
+    }
+
+        ' Agregar parámetros opcionales para órdenes LIMIT
+        If orderType = "LIMIT" Then
+            parameters.Add("price", price.ToString())
+            parameters.Add("timeInForce", timeInForce) ' "GTC" (Good Till Cancelled) por defecto
+        End If
+
+        ' Crear la query string
+        Dim queryString As String = String.Join("&", parameters.Select(Function(kvp) $"{kvp.Key}={kvp.Value}"))
+
+        ' Generar la firma usando la función existente
+        Dim signature As String = GenerarFirma(apiSecret, queryString)
+        parameters.Add("signature", signature)
+
+        ' Crear el cliente HTTP
+        Using client As New HttpClient()
+            ' Agregar la API Key al encabezado
+            client.DefaultRequestHeaders.Add("X-MBX-APIKEY", apiKey)
+
+            ' Crear el contenido de la solicitud
+            Dim content As New FormUrlEncodedContent(parameters)
+
+            ' Enviar la solicitud POST
+            Dim response As HttpResponseMessage = client.PostAsync(url, content).Result
+
+            ' Procesar la respuesta
+            If response.IsSuccessStatusCode Then
+                Dim responseData As String = response.Content.ReadAsStringAsync().Result
+                Return responseData ' Devuelve la respuesta JSON de la API
+            Else
+                Dim errorData As String = response.Content.ReadAsStringAsync().Result
+                Throw New Exception($"Error al enviar la orden: {response.StatusCode} - {errorData}")
+            End If
+        End Using
     End Function
 
 

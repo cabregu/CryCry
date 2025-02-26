@@ -25,12 +25,16 @@ Partial Class FrmCryCry
         BtnConsultar = New Button()
         DataGridView1 = New DataGridView()
         lblPrecio = New Label()
+        Label1 = New Label()
+        DataGridView2 = New DataGridView()
+        Button1 = New Button()
         CType(DataGridView1, ComponentModel.ISupportInitialize).BeginInit()
+        CType(DataGridView2, ComponentModel.ISupportInitialize).BeginInit()
         SuspendLayout()
         ' 
         ' BtnConsultar
         ' 
-        BtnConsultar.Location = New Point(586, 12)
+        BtnConsultar.Location = New Point(648, 12)
         BtnConsultar.Name = "BtnConsultar"
         BtnConsultar.Size = New Size(75, 23)
         BtnConsultar.TabIndex = 0
@@ -42,9 +46,9 @@ Partial Class FrmCryCry
         DataGridView1.AllowUserToAddRows = False
         DataGridView1.AllowUserToDeleteRows = False
         DataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
-        DataGridView1.Location = New Point(12, 79)
+        DataGridView1.Location = New Point(12, 70)
         DataGridView1.Name = "DataGridView1"
-        DataGridView1.Size = New Size(728, 431)
+        DataGridView1.Size = New Size(711, 151)
         DataGridView1.TabIndex = 1
         ' 
         ' lblPrecio
@@ -56,17 +60,49 @@ Partial Class FrmCryCry
         lblPrecio.TabIndex = 2
         lblPrecio.Text = "."
         ' 
+        ' Label1
+        ' 
+        Label1.AutoSize = True
+        Label1.Location = New Point(12, 224)
+        Label1.Name = "Label1"
+        Label1.Size = New Size(41, 15)
+        Label1.TabIndex = 3
+        Label1.Text = "Label1"
+        ' 
+        ' DataGridView2
+        ' 
+        DataGridView2.AllowUserToAddRows = False
+        DataGridView2.AllowUserToDeleteRows = False
+        DataGridView2.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
+        DataGridView2.Location = New Point(12, 368)
+        DataGridView2.Name = "DataGridView2"
+        DataGridView2.Size = New Size(711, 151)
+        DataGridView2.TabIndex = 5
+        ' 
+        ' Button1
+        ' 
+        Button1.Location = New Point(648, 310)
+        Button1.Name = "Button1"
+        Button1.Size = New Size(75, 23)
+        Button1.TabIndex = 4
+        Button1.Text = "Consultar"
+        Button1.UseVisualStyleBackColor = True
+        ' 
         ' FrmCryCry
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(752, 522)
+        ClientSize = New Size(735, 663)
+        Controls.Add(DataGridView2)
+        Controls.Add(Button1)
+        Controls.Add(Label1)
         Controls.Add(lblPrecio)
         Controls.Add(DataGridView1)
         Controls.Add(BtnConsultar)
         Name = "FrmCryCry"
         Text = "CryCry"
         CType(DataGridView1, ComponentModel.ISupportInitialize).EndInit()
+        CType(DataGridView2, ComponentModel.ISupportInitialize).EndInit()
         ResumeLayout(False)
         PerformLayout()
     End Sub
@@ -74,5 +110,8 @@ Partial Class FrmCryCry
     Friend WithEvents BtnConsultar As Button
     Friend WithEvents DataGridView1 As DataGridView
     Friend WithEvents lblPrecio As Label
+    Friend WithEvents Label1 As Label
+    Friend WithEvents DataGridView2 As DataGridView
+    Friend WithEvents Button1 As Button
 
 End Class
