@@ -79,6 +79,57 @@ Public Class ConexionEndPoints
         Return connectionString
     End Function
 
+    Public Shared Function ObtenerListaDeMonedas() As List(Of (String, String))
+        Dim monedas As New List(Of (String, String))()
+
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            Dim selectQuery As String = "SELECT moneda, estado FROM monedas"
+            Using command As New SQLiteCommand(selectQuery, connection)
+                Using reader As SQLiteDataReader = command.ExecuteReader()
+                    While reader.Read()
+                        Dim moneda As String = reader("moneda").ToString()
+                        Dim estado As String = reader("estado").ToString()
+                        monedas.Add((moneda, estado))
+                    End While
+                End Using
+            End Using
+        End Using
+
+        Return monedas
+    End Function
+
+    ' Función para agregar una nueva moneda
+    Public Shared Sub AgregarMoneda(moneda As String, estado As String)
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            Dim insertQuery As String = "INSERT INTO monedas (moneda, estado) VALUES (@moneda, @estado)"
+            Using command As New SQLiteCommand(insertQuery, connection)
+                command.Parameters.AddWithValue("@moneda", moneda)
+                command.Parameters.AddWithValue("@estado", estado)
+                command.ExecuteNonQuery()
+            End Using
+        End Using
+    End Sub
+
+    ' Función para actualizar el estado de una moneda por su nombre
+    Public Shared Sub ActualizarEstadoMoneda(moneda As String, nuevoEstado As String)
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            Dim updateQuery As String = "UPDATE monedas SET estado = @estado WHERE moneda = @moneda"
+            Using command As New SQLiteCommand(updateQuery, connection)
+                command.Parameters.AddWithValue("@estado", nuevoEstado)
+                command.Parameters.AddWithValue("@moneda", moneda)
+                command.ExecuteNonQuery()
+            End Using
+        End Using
+    End Sub
+
+
+
     Public Shared Sub InsertarOrdenFinalizadaEnBD(moneda As String, id As Integer, precio As Double, cantidad As Double, quoteqty As Double, tiempo As String, tipo As String)
         Using connection As New SQLiteConnection(ObtenerConexion())
             connection.Open()
@@ -189,52 +240,48 @@ Public Class ConexionEndPoints
     End Function
 
     Public Shared Function ObtenerOrderstrades(symbol As String, Optional limit As Integer = 1000) As DataTable
-        Dim url As String = $"https://api.binance.com/api/v3/trades?symbol={symbol}&limit={limit}"
+        Try
+            Dim url As String = $"https://api.binance.com/api/v3/trades?symbol={symbol}&limit={limit}"
 
-        Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
-        request.Method = "GET"
+            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+            request.Method = "GET"
 
-        Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
-        Dim responseStream As Stream = response.GetResponseStream()
-        Dim reader As New StreamReader(responseStream)
-        Dim responseJson As String = reader.ReadToEnd()
+            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+            Dim responseStream As Stream = response.GetResponseStream()
+            Dim reader As New StreamReader(responseStream)
+            Dim responseJson As String = reader.ReadToEnd()
 
-        Dim parsedResponse As JArray = JArray.Parse(responseJson)
+            Dim parsedResponse As JArray = JArray.Parse(responseJson)
 
-        ' Crear DataTable para almacenar los datos de operaciones recientes
-        Dim tradesTable As New DataTable()
-        tradesTable.Columns.Add("ID", GetType(Long))
-        tradesTable.Columns.Add("Precio", GetType(Decimal))
-        tradesTable.Columns.Add("Cantidad", GetType(Decimal))
-        tradesTable.Columns.Add("QuoteQty", GetType(Decimal))
-        tradesTable.Columns.Add("Tiempo", GetType(String))
-        tradesTable.Columns.Add("Tipo", GetType(String))
+            ' Crear DataTable para almacenar los datos de operaciones recientes
+            Dim tradesTable As New DataTable()
+            tradesTable.Columns.Add("ID", GetType(Long))
+            tradesTable.Columns.Add("Precio", GetType(Decimal))
+            tradesTable.Columns.Add("Cantidad", GetType(Decimal))
+            tradesTable.Columns.Add("QuoteQty", GetType(Decimal))
+            tradesTable.Columns.Add("Tiempo", GetType(Long)) ' Mantener el timestamp como Long
+            tradesTable.Columns.Add("Tipo", GetType(String))
 
-        ' Agregar los datos de operaciones recientes al DataTable
-        For Each trade As JObject In parsedResponse
-            Dim tradeId As Long = CLng(trade("id"))
-            Dim price As Decimal = CDec(trade("price"))
-            Dim quantity As Decimal = CDec(trade("qty"))
-            Dim quoteQty As Decimal = CDec(trade("quoteQty"))
-            Dim timestamp As Long = CLng(trade("time"))
+            ' Agregar los datos de operaciones recientes al DataTable
+            For Each trade As JObject In parsedResponse
+                Dim tradeId As Long = CLng(trade("id"))
+                Dim price As Decimal = CDec(trade("price"))
+                Dim quantity As Decimal = CDec(trade("qty"))
+                Dim quoteQty As Decimal = CDec(trade("quoteQty"))
+                Dim timestamp As Long = CLng(trade("time")) ' Mantener el timestamp sin convertir
+                Dim tradeType As String = If(CBool(trade("isBuyerMaker")), "Compra", "Venta")
 
-            ' Convertir la marca de tiempo a la hora local de Argentina con segundos y milisegundos
-            Dim utcDateTime As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).UtcDateTime
-            Dim argentinaTimeZone As TimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time")
-            Dim argentinaDateTime As DateTime = TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, argentinaTimeZone)
+                tradesTable.Rows.Add(tradeId, price, quantity, quoteQty, timestamp, tradeType)
+            Next
 
-            ' Formatear la fecha con segundos y milisegundos
-            Dim timestampFormatted As String = argentinaDateTime.ToString("yyyy-MM-dd HH:mm:ss")
-
-            Dim tradeType As String = If(CBool(trade("isBuyerMaker")), "Compra", "Venta")
-
-            tradesTable.Rows.Add(tradeId, price, quantity, quoteQty, timestampFormatted, tradeType)
-        Next
-
-        Return tradesTable
+            Return tradesTable
+        Catch ex As Exception
+            Console.WriteLine("Error: " & ex.Message)
+            Return Nothing
+        End Try
     End Function
 
-    Public Shared Function ObtenerLibroDeOrdenesContiempo(symbol As String, timestamp As String, Optional limit As Integer = 100) As DataTable
+    Public Shared Function ObtenerLibroDeOrdenes(symbol As String, Optional limit As Integer = 100) As DataTable
         Try
             Dim url As String = $"https://api.binance.com/api/v3/depth?symbol={symbol}&limit={limit}"
 
@@ -248,25 +295,23 @@ Public Class ConexionEndPoints
 
             Dim parsedResponse As JObject = JObject.Parse(responseJson)
 
-            ' Crear la tabla con las columnas necesarias
+
             Dim ordersTable As New DataTable()
-            ordersTable.Columns.Add("FechaYHora", GetType(String)) ' Nueva columna para la marca de tiempo
             ordersTable.Columns.Add("Precio", GetType(Decimal))
             ordersTable.Columns.Add("Cantidad", GetType(Decimal))
-            ordersTable.Columns.Add("Tipo", GetType(String)) ' Mover "Tipo" al final
+            ordersTable.Columns.Add("Tipo", GetType(String))
 
-            ' Agregar las órdenes de compra (bids)
+
             For Each bid As JArray In parsedResponse("bids")
                 Dim price As Decimal = CDec(bid(0))
                 Dim quantity As Decimal = CDec(bid(1))
-                ordersTable.Rows.Add(timestamp, price, quantity, "Compra") ' Agregar la marca de tiempo
+                ordersTable.Rows.Add(price, quantity, "Compra")
             Next
 
-            ' Agregar las órdenes de venta (asks)
             For Each ask As JArray In parsedResponse("asks")
                 Dim price As Decimal = CDec(ask(0))
                 Dim quantity As Decimal = CDec(ask(1))
-                ordersTable.Rows.Add(timestamp, price, quantity, "Venta") ' Agregar la marca de tiempo
+                ordersTable.Rows.Add(price, quantity, "Venta")
             Next
 
             Return ordersTable
