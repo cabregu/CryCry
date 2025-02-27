@@ -134,6 +134,37 @@ Public Class ConexionEndPoints
         Using connection As New SQLiteConnection(ObtenerConexion())
             connection.Open()
 
+            ' Verificar si el ID ya existe en la base de datos
+            Dim checkQuery As String = "SELECT COUNT(*) FROM ordenesfinalizadas WHERE id = @id"
+            Using checkCommand As New SQLiteCommand(checkQuery, connection)
+                checkCommand.Parameters.AddWithValue("@id", id)
+                Dim count As Integer = Convert.ToInt32(checkCommand.ExecuteScalar())
+
+                If count > 0 Then
+                    ' Si el ID ya existe, registrar en el archivo log.txt
+                    Dim logPath As String = "C:\BaseBina\log.txt"
+                    Dim currentTime As String = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                    Dim logMessage As String = $"[{currentTime}] ID existente: {id}{Environment.NewLine}"
+
+                    ' Contar cuántos IDs ya existen en la base de datos
+                    Dim countQuery As String = "SELECT COUNT(*) FROM ordenesfinalizadas"
+                    Using countCommand As New SQLiteCommand(countQuery, connection)
+                        Dim totalExisting As Integer = Convert.ToInt32(countCommand.ExecuteScalar())
+                        logMessage &= $"Cantidad de códigos existentes en la base de datos: {totalExisting}{Environment.NewLine}"
+                    End Using
+
+                    ' Escribir en el archivo log.txt
+                    If Not Directory.Exists("C:\BaseBina") Then
+                        Directory.CreateDirectory("C:\BaseBina")
+                    End If
+                    File.AppendAllText(logPath, logMessage)
+
+                    ' Salir de la función, no insertar el registro
+                    Return
+                End If
+            End Using
+
+            ' Si el ID no existe, insertar en la base de datos
             Dim insertQuery As String = "INSERT INTO ordenesfinalizadas (moneda, id, precio, cantidad, quoteqty, tiempo, tipo) VALUES (@moneda, @id, @precio, @cantidad, @quoteqty, @tiempo, @tipo)"
             Using command As New SQLiteCommand(insertQuery, connection)
                 command.Parameters.AddWithValue("@moneda", moneda)

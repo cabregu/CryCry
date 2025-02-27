@@ -4,31 +4,6 @@
 
 Public Class FrmCryCry
 
-
-
-    Private Sub FrmCryCry_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-
-
-    End Sub
-
-
-
-    Private Sub Button1_Click(sender As Object, e As EventArgs)
-
-
-        Dim Fechayhora As String = ObtenerHoraServidor()
-        Dim argentinaTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time")
-        Dim horaArgentina = TimeZoneInfo.ConvertTimeFromUtc(Fechayhora, argentinaTimeZone)
-
-        Dim symbol = "ADAUSDT"
-        Dim dt = ObtenerLibroDeOrdenesContiempo(symbol, horaArgentina)
-        DataGridView2.DataSource = dt
-
-
-    End Sub
-
-
-
     Public Shared Sub ProcesarPrecios()
         Dim listaDeMonedas = ObtenerListaDeMonedas()
         For Each moneda In listaDeMonedas
@@ -56,7 +31,6 @@ Public Class FrmCryCry
         ProcesarDatosOrdenesfinalizadas(horaArgentinaFormatted)
         ProcesarLibroDeOrdenes(horaArgentinaFormatted)
     End Function
-
     Private Shared Sub ProcesarDatosOrdenesfinalizadas(ByVal tiempoObtenido As String)
         Dim listaDeMonedas = ObtenerListaDeMonedas()
 
@@ -101,5 +75,18 @@ Public Class FrmCryCry
     End Sub
 
 
+    Private Sub TmrOrdenes_Tick(sender As Object, e As EventArgs) Handles TmrOrdenes.Tick
+        ObtenerTiempoYprocesarAmboTiposdeOrdenes()
+    End Sub
 
+    Private Sub TmrPrecios_Tick(sender As Object, e As EventArgs) Handles TmrPrecios.Tick
+        ProcesarPrecios()
+    End Sub
+
+    Private Sub FrmCryCry_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+
+        TmrOrdenes.Start()
+        TmrPrecio.Start()
+
+    End Sub
 End Class

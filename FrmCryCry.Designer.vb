@@ -22,7 +22,18 @@ Partial Class FrmCryCry
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
+        components = New ComponentModel.Container()
+        TmrOrdenes = New Timer(components)
+        TmrPrecios = New Timer(components)
         SuspendLayout()
+        ' 
+        ' TmrOrdenes
+        ' 
+        TmrOrdenes.Interval = 60000
+        ' 
+        ' TmrPrecios
+        ' 
+        TmrPrecios.Interval = 1000
         ' 
         ' FrmCryCry
         ' 
@@ -35,5 +46,7 @@ Partial Class FrmCryCry
     End Sub
     Friend WithEvents TmrOrgenes As Timer
     Friend WithEvents TmrPrecio As Timer
+    Friend WithEvents TmrOrdenes As Timer
+    Friend WithEvents TmrPrecios As Timer
 
 End Class
