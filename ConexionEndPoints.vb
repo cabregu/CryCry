@@ -79,11 +79,56 @@ Public Class ConexionEndPoints
         Return connectionString
     End Function
 
+    Public Shared Sub InsertarOrdenFinalizadaEnBD(moneda As String, id As Integer, precio As Double, cantidad As Double, quoteqty As Double, tiempo As String, tipo As String)
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            Dim insertQuery As String = "INSERT INTO ordenesfinalizadas (moneda, id, precio, cantidad, quoteqty, tiempo, tipo) VALUES (@moneda, @id, @precio, @cantidad, @quoteqty, @tiempo, @tipo)"
+            Using command As New SQLiteCommand(insertQuery, connection)
+                command.Parameters.AddWithValue("@moneda", moneda)
+                command.Parameters.AddWithValue("@id", id)
+                command.Parameters.AddWithValue("@precio", precio)
+                command.Parameters.AddWithValue("@cantidad", cantidad)
+                command.Parameters.AddWithValue("@quoteqty", quoteqty)
+                command.Parameters.AddWithValue("@tiempo", tiempo)
+                command.Parameters.AddWithValue("@tipo", tipo)
+                command.ExecuteNonQuery()
+            End Using
+        End Using
+    End Sub
+
+    Public Shared Sub InsertarPrecioEnBD(moneda As String, tiempo As String, precio As Double)
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            Dim insertQuery As String = "INSERT INTO precios (moneda, tiempo, precio) VALUES (@moneda, @tiempo, @precio)"
+            Using command As New SQLiteCommand(insertQuery, connection)
+                command.Parameters.AddWithValue("@moneda", moneda)
+                command.Parameters.AddWithValue("@tiempo", tiempo)
+                command.Parameters.AddWithValue("@precio", precio)
+                command.ExecuteNonQuery()
+            End Using
+        End Using
+    End Sub
+
+    Public Shared Sub InsertarOrdenPendienteEnBD(moneda As String, tiempo As String, precio As Double, cantidad As Double, tipo As String)
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            Dim insertQuery As String = "INSERT INTO ordenespendientes (moneda, tiempo, precio, cantidad, tipo) VALUES (@moneda, @tiempo, @precio, @cantidad, @tipo)"
+            Using command As New SQLiteCommand(insertQuery, connection)
+                command.Parameters.AddWithValue("@moneda", moneda)
+                command.Parameters.AddWithValue("@tiempo", tiempo)
+                command.Parameters.AddWithValue("@precio", precio)
+                command.Parameters.AddWithValue("@cantidad", cantidad)
+                command.Parameters.AddWithValue("@tipo", tipo)
+                command.ExecuteNonQuery()
+            End Using
+        End Using
+    End Sub
 
 
-
-
-    'PUBLICAS PARA CONSULTAS A BIANANCE
+    'PUBLICAS PARA CONSULTAS A BINANCE
 
     Public Shared Function ObtenerHoraServidor() As DateTime
         Try

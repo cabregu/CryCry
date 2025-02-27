@@ -111,7 +111,7 @@ Partial Class FrmCryCry
         Controls.Add(DataGridView1)
         Controls.Add(BtnConsultar)
         Name = "FrmCryCry"
-        Text = "CryCry"
+        Text = "45"
         CType(DataGridView1, ComponentModel.ISupportInitialize).EndInit()
         CType(DataGridView2, ComponentModel.ISupportInitialize).EndInit()
         ResumeLayout(False)
