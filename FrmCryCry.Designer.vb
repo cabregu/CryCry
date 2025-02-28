@@ -2,7 +2,7 @@
 Partial Class FrmCryCry
     Inherits System.Windows.Forms.Form
 
-    'Form overrides dispose to clean up the component list.
+
     <System.Diagnostics.DebuggerNonUserCode()>
     Protected Overrides Sub Dispose(ByVal disposing As Boolean)
         Try
@@ -14,32 +14,29 @@ Partial Class FrmCryCry
         End Try
     End Sub
 
-    'Required by the Windows Form Designer
     Private components As System.ComponentModel.IContainer
 
-    'NOTE: The following procedure is required by the Windows Form Designer
-    'It can be modified using the Windows Form Designer.  
-    'Do not modify it using the code editor.
+
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
         components = New ComponentModel.Container()
-        TmrOrdenes = New Timer(components)
-        TmrPrecios = New Timer(components)
+        Timer1 = New Timer(components)
+        Timer2 = New Timer(components)
         SuspendLayout()
         ' 
-        ' TmrOrdenes
+        ' Timer1
         ' 
-        TmrOrdenes.Interval = 60000
+        Timer1.Interval = 60000
         ' 
-        ' TmrPrecios
+        ' Timer2
         ' 
-        TmrPrecios.Interval = 1000
+        Timer2.Interval = 1000
         ' 
         ' FrmCryCry
         ' 
-        AutoScaleDimensions = New SizeF(7.0F, 15.0F)
+        AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
-        ClientSize = New Size(1001, 785)
+        ClientSize = New Size(355, 306)
         Name = "FrmCryCry"
         Text = "CryCry"
         ResumeLayout(False)
@@ -48,5 +45,7 @@ Partial Class FrmCryCry
     Friend WithEvents TmrPrecio As Timer
     Friend WithEvents TmrOrdenes As Timer
     Friend WithEvents TmrPrecios As Timer
+    Friend WithEvents Timer1 As Timer
+    Friend WithEvents Timer2 As Timer
 
 End Class

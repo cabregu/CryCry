@@ -73,25 +73,53 @@ Public Class ConexionEndPoints
         End Using
     End Sub
 
+    Public Shared Sub BorrarDatosDeTablas()
+        Using connection As New SQLiteConnection(ObtenerConexion())
+            connection.Open()
+
+            ' Lista de tablas de las que se eliminarán los datos
+            Dim tablas As String() = {"ordenesfinalizadas", "precios", "ordenespendientes"}
+
+            For Each tabla In tablas
+                ' Verificar si la tabla existe
+                Dim checkTableExists As String = $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tabla}'"
+                Using command As New SQLiteCommand(checkTableExists, connection)
+                    Dim tableExists As Boolean = Convert.ToInt32(command.ExecuteScalar()) > 0
+                    If tableExists Then
+                        ' Eliminar todos los registros de la tabla
+                        Dim deleteQuery As String = $"DELETE FROM {tabla}"
+                        Using deleteCommand As New SQLiteCommand(deleteQuery, connection)
+                            deleteCommand.ExecuteNonQuery()
+
+                        End Using
+                    Else
+
+                    End If
+                End Using
+            Next
+        End Using
+    End Sub
+
     Private Shared Function ObtenerConexion() As String
         Dim connectionString As String
         connectionString = "Data Source=C:\BaseBina\BaseBina.db;Version=3;"
         Return connectionString
     End Function
 
-    Public Shared Function ObtenerListaDeMonedas() As List(Of (String, String))
-        Dim monedas As New List(Of (String, String))()
+    Public Shared Function ObtenerListaDeMonedasActivas() As List(Of String)
+        Dim monedas As New List(Of String)()
 
         Using connection As New SQLiteConnection(ObtenerConexion())
             connection.Open()
 
-            Dim selectQuery As String = "SELECT moneda, estado FROM monedas"
+            ' Consulta SQL para obtener solo las monedas con estado "Activo"
+            Dim selectQuery As String = "SELECT moneda FROM monedas WHERE estado = 'Activo'"
             Using command As New SQLiteCommand(selectQuery, connection)
                 Using reader As SQLiteDataReader = command.ExecuteReader()
                     While reader.Read()
+                        ' Agregar solo la moneda a la lista
                         Dim moneda As String = reader("moneda").ToString()
-                        Dim estado As String = reader("estado").ToString()
-                        monedas.Add((moneda, estado))
+                        monedas.Add(moneda)
                     End While
                 End Using
             End Using
@@ -134,37 +162,34 @@ Public Class ConexionEndPoints
         Using connection As New SQLiteConnection(ObtenerConexion())
             connection.Open()
 
-            ' Verificar si el ID ya existe en la base de datos
             Dim checkQuery As String = "SELECT COUNT(*) FROM ordenesfinalizadas WHERE id = @id"
             Using checkCommand As New SQLiteCommand(checkQuery, connection)
                 checkCommand.Parameters.AddWithValue("@id", id)
                 Dim count As Integer = Convert.ToInt32(checkCommand.ExecuteScalar())
 
                 If count > 0 Then
-                    ' Si el ID ya existe, registrar en el archivo log.txt
+
                     Dim logPath As String = "C:\BaseBina\log.txt"
                     Dim currentTime As String = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                    Dim logMessage As String = $"[{currentTime}] ID existente: {id}{Environment.NewLine}"
 
-                    ' Contar cuántos IDs ya existen en la base de datos
                     Dim countQuery As String = "SELECT COUNT(*) FROM ordenesfinalizadas"
                     Using countCommand As New SQLiteCommand(countQuery, connection)
                         Dim totalExisting As Integer = Convert.ToInt32(countCommand.ExecuteScalar())
-                        logMessage &= $"Cantidad de códigos existentes en la base de datos: {totalExisting}{Environment.NewLine}"
+
+
+                        Dim logMessage As String = $"[{currentTime}] Cantidad de IDs existentes: {totalExisting}"
+
+                        If Not Directory.Exists("C:\BaseBina") Then
+                            Directory.CreateDirectory("C:\BaseBina")
+                        End If
+                        File.WriteAllText(logPath, logMessage)
                     End Using
 
-                    ' Escribir en el archivo log.txt
-                    If Not Directory.Exists("C:\BaseBina") Then
-                        Directory.CreateDirectory("C:\BaseBina")
-                    End If
-                    File.AppendAllText(logPath, logMessage)
 
-                    ' Salir de la función, no insertar el registro
                     Return
                 End If
             End Using
 
-            ' Si el ID no existe, insertar en la base de datos
             Dim insertQuery As String = "INSERT INTO ordenesfinalizadas (moneda, id, precio, cantidad, quoteqty, tiempo, tipo) VALUES (@moneda, @id, @precio, @cantidad, @quoteqty, @tiempo, @tipo)"
             Using command As New SQLiteCommand(insertQuery, connection)
                 command.Parameters.AddWithValue("@moneda", moneda)
@@ -241,115 +266,109 @@ Public Class ConexionEndPoints
     End Function
 
     Public Shared Function ObtenerPrecio(ByVal Symbolo As String) As (Decimal, DateTime)
-        Try
-            ' URL para obtener el precio actual
-            Dim precioUrl As String = "https://api.binance.com/api/v3/ticker/price?symbol=" & Symbolo
+
+        Dim precioUrl As String = "https://api.binance.com/api/v3/ticker/price?symbol=" & Symbolo
             Dim precioRequest As WebRequest = WebRequest.Create(precioUrl)
             Dim precioResponse As WebResponse = precioRequest.GetResponse()
             Dim precioStream As Stream = precioResponse.GetResponseStream()
             Dim precioReader As New StreamReader(precioStream)
             Dim precioJson As String = precioReader.ReadToEnd()
 
-            ' Deserializar el precio
-            Dim precios As PreciosActuales = JsonConvert.DeserializeObject(Of PreciosActuales)(precioJson)
+        Dim precios As PreciosActuales = JsonConvert.DeserializeObject(Of PreciosActuales)(precioJson)
             Dim precio As Decimal = precios.price
 
-            ' Cerrar recursos
-            precioReader.Close()
-            precioResponse.Close()
+        precioReader.Close()
+        precioResponse.Close()
+        Dim serverDateTime As DateTime = ObtenerHoraServidor()
+        Return (precio, serverDateTime)
 
-            ' Llamar a la función ObtenerHoraServidor para obtener la hora
-            Dim serverDateTime As DateTime = ObtenerHoraServidor()
+    End Function
+    Public Shared Function ObtenerOrderstrades(symbol As String, Optional limit As Integer = 200) As DataTable
+        Dim url As String = $"https://api.binance.com/api/v3/trades?symbol={symbol}&limit={limit}"
 
-            ' Devolver el precio y la hora del servidor como una tupla
-            Return (precio, serverDateTime)
-        Catch ex As Exception
-            Console.WriteLine("Error al obtener el precio: " & ex.Message)
-            ' En caso de error, devolver valores por defecto
-            Return (0, DateTime.MinValue)
-        End Try
+        Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+        request.Method = "GET"
+
+        Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+        Dim responseStream As Stream = response.GetResponseStream()
+        Dim reader As New StreamReader(responseStream)
+        Dim responseJson As String = reader.ReadToEnd()
+
+        Dim parsedResponse As JArray = JArray.Parse(responseJson)
+
+        ' Crear DataTable para almacenar los datos de operaciones recientes
+        Dim tradesTable As New DataTable()
+        tradesTable.Columns.Add("ID", GetType(Long))
+        tradesTable.Columns.Add("Precio", GetType(Decimal))
+        tradesTable.Columns.Add("Cantidad", GetType(Decimal))
+        tradesTable.Columns.Add("QuoteQty", GetType(Decimal))
+        tradesTable.Columns.Add("Tiempo", GetType(String)) ' Convertir el timestamp a hora local en formato String
+        tradesTable.Columns.Add("Tipo", GetType(String))
+
+        ' Zona horaria de Argentina
+        Dim argentinaTimeZone As TimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time")
+
+        ' Agregar los datos de operaciones recientes al DataTable
+        For Each trade As JObject In parsedResponse
+            Dim tradeId As Long = CLng(trade("id"))
+            Dim price As Decimal = CDec(trade("price"))
+            Dim quantity As Decimal = CDec(trade("qty"))
+            Dim quoteQty As Decimal = CDec(trade("quoteQty"))
+            Dim timestamp As Long = CLng(trade("time")) ' Timestamp en milisegundos
+
+            ' Convertir el timestamp a DateTime en UTC
+            Dim tradeTimeUtc As DateTime = DateTimeOffset.FromUnixTimeMilliseconds(timestamp).UtcDateTime
+
+            ' Convertir la hora UTC a la hora local de Argentina
+            Dim tradeTimeArgentina As DateTime = TimeZoneInfo.ConvertTimeFromUtc(tradeTimeUtc, argentinaTimeZone)
+
+            ' Formatear la hora en un formato legible
+            Dim tradeTimeFormatted As String = tradeTimeArgentina.ToString("yyyy-MM-dd HH:mm:ss")
+
+            Dim tradeType As String = If(CBool(trade("isBuyerMaker")), "Compra", "Venta")
+
+            tradesTable.Rows.Add(tradeId, price, quantity, quoteQty, tradeTimeFormatted, tradeType)
+        Next
+
+        Return tradesTable
     End Function
 
-    Public Shared Function ObtenerOrderstrades(symbol As String, Optional limit As Integer = 1000) As DataTable
-        Try
-            Dim url As String = $"https://api.binance.com/api/v3/trades?symbol={symbol}&limit={limit}"
+    Public Shared Function ObtenerLibroDeOrdenes(symbol As String, Optional limit As Integer = 200) As DataTable
 
-            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
-            request.Method = "GET"
+        Dim url As String = $"https://api.binance.com/api/v3/depth?symbol={symbol}&limit={limit}"
 
-            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
-            Dim responseStream As Stream = response.GetResponseStream()
-            Dim reader As New StreamReader(responseStream)
-            Dim responseJson As String = reader.ReadToEnd()
+        Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
+        request.Method = "GET"
 
-            Dim parsedResponse As JArray = JArray.Parse(responseJson)
+        Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
+        Dim responseStream As Stream = response.GetResponseStream()
+        Dim reader As New StreamReader(responseStream)
+        Dim responseJson As String = reader.ReadToEnd()
 
-            ' Crear DataTable para almacenar los datos de operaciones recientes
-            Dim tradesTable As New DataTable()
-            tradesTable.Columns.Add("ID", GetType(Long))
-            tradesTable.Columns.Add("Precio", GetType(Decimal))
-            tradesTable.Columns.Add("Cantidad", GetType(Decimal))
-            tradesTable.Columns.Add("QuoteQty", GetType(Decimal))
-            tradesTable.Columns.Add("Tiempo", GetType(Long)) ' Mantener el timestamp como Long
-            tradesTable.Columns.Add("Tipo", GetType(String))
-
-            ' Agregar los datos de operaciones recientes al DataTable
-            For Each trade As JObject In parsedResponse
-                Dim tradeId As Long = CLng(trade("id"))
-                Dim price As Decimal = CDec(trade("price"))
-                Dim quantity As Decimal = CDec(trade("qty"))
-                Dim quoteQty As Decimal = CDec(trade("quoteQty"))
-                Dim timestamp As Long = CLng(trade("time")) ' Mantener el timestamp sin convertir
-                Dim tradeType As String = If(CBool(trade("isBuyerMaker")), "Compra", "Venta")
-
-                tradesTable.Rows.Add(tradeId, price, quantity, quoteQty, timestamp, tradeType)
-            Next
-
-            Return tradesTable
-        Catch ex As Exception
-            Console.WriteLine("Error: " & ex.Message)
-            Return Nothing
-        End Try
-    End Function
-
-    Public Shared Function ObtenerLibroDeOrdenes(symbol As String, Optional limit As Integer = 100) As DataTable
-        Try
-            Dim url As String = $"https://api.binance.com/api/v3/depth?symbol={symbol}&limit={limit}"
-
-            Dim request As HttpWebRequest = CType(WebRequest.Create(url), HttpWebRequest)
-            request.Method = "GET"
-
-            Dim response As HttpWebResponse = CType(request.GetResponse(), HttpWebResponse)
-            Dim responseStream As Stream = response.GetResponseStream()
-            Dim reader As New StreamReader(responseStream)
-            Dim responseJson As String = reader.ReadToEnd()
-
-            Dim parsedResponse As JObject = JObject.Parse(responseJson)
+        Dim parsedResponse As JObject = JObject.Parse(responseJson)
 
 
-            Dim ordersTable As New DataTable()
-            ordersTable.Columns.Add("Precio", GetType(Decimal))
-            ordersTable.Columns.Add("Cantidad", GetType(Decimal))
-            ordersTable.Columns.Add("Tipo", GetType(String))
+        Dim ordersTable As New DataTable()
+        ordersTable.Columns.Add("Precio", GetType(Decimal))
+        ordersTable.Columns.Add("Cantidad", GetType(Decimal))
+        ordersTable.Columns.Add("Tipo", GetType(String))
 
 
-            For Each bid As JArray In parsedResponse("bids")
-                Dim price As Decimal = CDec(bid(0))
-                Dim quantity As Decimal = CDec(bid(1))
-                ordersTable.Rows.Add(price, quantity, "Compra")
-            Next
+        For Each bid As JArray In parsedResponse("bids")
+            Dim price As Decimal = CDec(bid(0))
+            Dim quantity As Decimal = CDec(bid(1))
+            ordersTable.Rows.Add(price, quantity, "Compra")
+        Next
 
-            For Each ask As JArray In parsedResponse("asks")
-                Dim price As Decimal = CDec(ask(0))
-                Dim quantity As Decimal = CDec(ask(1))
-                ordersTable.Rows.Add(price, quantity, "Venta")
-            Next
+        For Each ask As JArray In parsedResponse("asks")
+            Dim price As Decimal = CDec(ask(0))
+            Dim quantity As Decimal = CDec(ask(1))
+            ordersTable.Rows.Add(price, quantity, "Venta")
+        Next
 
-            Return ordersTable
-        Catch ex As Exception
-            Console.WriteLine("Error: " & ex.Message)
-            Return Nothing
-        End Try
+        Return ordersTable
+
+
     End Function
 
     Public Shared Function ObtenerDatosVelasPublicos(symbol As String, interval As String, Optional limit As Integer = 100) As DataTable
